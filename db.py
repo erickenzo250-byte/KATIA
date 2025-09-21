@@ -3,7 +3,6 @@ from sqlmodel import SQLModel, Field, create_engine, Session
 from datetime import datetime
 from typing import Optional
 
-# --- Models ---
 class User(SQLModel, table=True):
     __tablename__ = "users"
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -16,14 +15,12 @@ class User(SQLModel, table=True):
     profile_pic: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
-
 class Like(SQLModel, table=True):
     __tablename__ = "likes"
     id: Optional[int] = Field(default=None, primary_key=True)
     from_user_id: int = Field(foreign_key="users.id")
     to_user_id: int = Field(foreign_key="users.id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
-
 
 class Message(SQLModel, table=True):
     __tablename__ = "messages"
@@ -33,16 +30,11 @@ class Message(SQLModel, table=True):
     content: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
-
-# --- Engine ---
+# --- Database setup ---
 engine = create_engine("sqlite:///dating.db", echo=False)
 
-
-# --- Helpers ---
-def init_db() -> None:
-    """Create tables if not exist."""
+def init_db():
     SQLModel.metadata.create_all(engine)
-
 
 def get_session():
     with Session(engine) as session:
