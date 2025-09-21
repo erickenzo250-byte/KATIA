@@ -1,44 +1,63 @@
-# db.py
-from sqlmodel import SQLModel, Field, create_engine, Session
 from datetime import datetime
-from typing import Optional
-from contextlib import contextmanager
+from sqlmodel import SQLModel, Field, Relationship, create_engine, Session
 
+# ------------------------
+# User Model
+# ------------------------
 class User(SQLModel, table=True):
     __tablename__ = "users"
-    id: Optional[int] = Field(default=None, primary_key=True)
+
+    id: int | None = Field(default=None, primary_key=True)
     username: str
     email: str
-    password: str
-    gender: str
-    dob: str
-    bio: Optional[str] = None
-    profile_pic: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+    likes: list["Like"] = Relationship(back_populates="user")
+    messages: list["Message"] = Relationship(back_populates="sender")
+
+
+# ------------------------
+# Like Model
+# ------------------------
 class Like(SQLModel, table=True):
     __tablename__ = "likes"
-    id: Optional[int] = Field(default=None, primary_key=True)
-    from_user_id: int = Field(foreign_key="users.id")
-    to_user_id: int = Field(foreign_key="users.id")
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+    user: User = Relationship(back_populates="likes")
+
+
+# ------------------------
+# Message Model
+# ------------------------
 class Message(SQLModel, table=True):
     __tablename__ = "messages"
-    id: Optional[int] = Field(default=None, primary_key=True)
+
+    id: int | None = Field(default=None, primary_key=True)
     sender_id: int = Field(foreign_key="users.id")
-    receiver_id: int = Field(foreign_key="users.id")
     content: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
-# --- Database setup ---
-engine = create_engine("sqlite:///dating.db", echo=False)
+    sender: User = Relationship(back_populates="messages")
 
-def init_db():
+
+# ------------------------
+# Database Setup
+# ------------------------
+
+DATABASE_URL = "sqlite:///database.db"   # ✅ change this if using Postgres/MySQL
+
+engine = create_engine(DATABASE_URL, echo=True)
+
+
+def init_db() -> None:
+    """Create all database tables."""
     SQLModel.metadata.create_all(engine)
 
-@contextmanager
-def get_session():
-    """Context manager for database session"""
+
+def get_session() -> Session:
+    """Provide a new session for database operations."""
     with Session(engine) as session:
         yield session
