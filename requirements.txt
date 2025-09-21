@@ -1,0 +1,4 @@
+### FILE: requirements.txt
+streamlit
+sqlmodel
+passlib[bcrypt]
