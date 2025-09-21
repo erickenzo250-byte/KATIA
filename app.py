@@ -2,7 +2,6 @@
 import os
 import streamlit as st
 from db import init_db, get_session, User, Like, Message
-from auth import hash_password, verify_password
 from sqlmodel import select
 from datetime import datetime
 
@@ -11,54 +10,20 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 init_db()
 
-# --- Session State ---
-if "user" not in st.session_state:
-    st.session_state.user = None
-
-# --- Auth Pages ---
-def register():
-    st.header("Register")
-    username = st.text_input("Username")
-    email = st.text_input("Email")
-    password = st.text_input("Password", type="password")
-    gender = st.selectbox("Gender", ["Male", "Female", "Other"])
-    dob = st.date_input("Date of Birth")
-    if st.button("Register"):
-        with get_session() as db:
-            if db.exec(select(User).where(User.username == username)).first():
-                st.error("Username taken")
-            else:
-                user = User(
-                    username=username,
-                    email=email,
-                    password=hash_password(password),
-                    gender=gender,
-                    dob=str(dob),
-                )
-                db.add(user)
-                db.commit()
-                st.success("Registered! Please login.")
-
-def login():
-    st.header("Login")
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-    if st.button("Login"):
-        with get_session() as db:
-            user = db.exec(select(User).where(User.username == username)).first()
-            if user and verify_password(password, user.password):
-                st.session_state.user = user
-                st.rerun()   # ✅ updated
-            else:
-                st.error("Invalid login")
-
-def logout():
-    st.session_state.user = None
-    st.rerun()  # ✅ updated
+# --- Force Admin Session ---
+with get_session() as db:
+    user = db.exec(select(User)).first()
+    if not user:
+        # create dummy admin user if DB is empty
+        user = User(username="admin", email="admin@example.com", password="admin", gender="Other", dob="2000-01-01")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    st.session_state.user = user
 
 # --- Features ---
 def profile():
-    st.header("My Profile")
+    st.header("My Profile (Admin Mode)")
     u = st.session_state.user
     with get_session() as db:
         user = db.get(User, u.id)
@@ -113,20 +78,11 @@ def chat():
             st.write(f"{sender}: {m.content} ({m.created_at.strftime('%H:%M')})")
 
 # --- Main ---
-st.sidebar.title("Dating App")
-if st.session_state.user:
-    page = st.sidebar.radio("Menu", ["Profile", "Browse", "Chat", "Logout"])
-    if page == "Profile":
-        profile()
-    elif page == "Browse":
-        browse()
-    elif page == "Chat":
-        chat()
-    elif page == "Logout":
-        logout()
-else:
-    page = st.sidebar.radio("Auth", ["Login", "Register"])
-    if page == "Login":
-        login()
-    elif page == "Register":
-        register()
+st.sidebar.title("Dating App (Admin Mode)")
+page = st.sidebar.radio("Menu", ["Profile", "Browse", "Chat"])
+if page == "Profile":
+    profile()
+elif page == "Browse":
+    browse()
+elif page == "Chat":
+    chat()
