@@ -1,95 +1,116 @@
-### FILE: app.py
-import os
 import streamlit as st
 from db import init_db, get_session, User, Like, Message
+from datetime import datetime
+import random
 
 # --- Prevent reinitializing DB on every Streamlit reload ---
 if "db_initialized" not in st.session_state:
     init_db()
     st.session_state["db_initialized"] = True
-import streamlit as st
-from db import init_db, get_session, User, Like, Message
-from sqlmodel import select
-from datetime import datetime
 
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+st.set_page_config(page_title="Dating Admin", layout="wide")
+st.title("💻 Dating Site Admin Dashboard")
 
-init_db()
+# --- Sidebar navigation ---
+menu = ["Users", "Likes", "Messages"]
+choice = st.sidebar.radio("Navigate", menu)
 
-# --- Force Admin Session ---
-with get_session() as db:
-    user = db.exec(select(User)).first()
-    if not user:
-        # create dummy admin user if DB is empty
-        user = User(username="admin", email="admin@example.com", password="admin", gender="Other", dob="2000-01-01")
+# --- Reset Database Button ---
+if st.sidebar.button("⚠️ Reset Database"):
+    with get_session() as db:
+        db.query(Like).delete()
+        db.query(Message).delete()
+        db.query(User).delete()
+        db.commit()
+    st.sidebar.success("Database has been reset!")
+
+# --- Dummy data helpers ---
+def add_dummy_user():
+    usernames = ["alice", "bob", "charlie", "diana", "eva"]
+    name = random.choice(usernames) + str(random.randint(100, 999))
+    user = User(
+        username=name,
+        email=f"{name}@test.com",
+        password="hashedpassword",
+        gender=random.choice(["Male", "Female"]),
+        dob="1990-01-01",
+        bio="This is a dummy bio.",
+        profile_pic=None,
+        created_at=datetime.utcnow()
+    )
+    with get_session() as db:
         db.add(user)
         db.commit()
-        db.refresh(user)
-    st.session_state.user = user
 
-# --- Features ---
-def profile():
-    st.header("My Profile (Admin Mode)")
-    u = st.session_state.user
+def add_dummy_like():
     with get_session() as db:
-        user = db.get(User, u.id)
-        st.text_input("Username", value=user.username, disabled=True)
-        bio = st.text_area("Bio", value=user.bio or "")
-        pic = st.file_uploader("Upload Profile Picture", type=["jpg","png"])
-        if st.button("Save"):
-            if pic:
-                path = os.path.join(UPLOAD_DIR, f"user_{user.id}.png")
-                with open(path, "wb") as f:
-                    f.write(pic.read())
-                user.profile_pic = path
-            user.bio = bio
-            db.add(user)
-            db.commit()
-            st.success("Updated!")
+        users = db.query(User).all()
+        if len(users) < 2:
+            return False
+        u1, u2 = random.sample(users, 2)
+        like = Like(from_user_id=u1.id, to_user_id=u2.id, created_at=datetime.utcnow())
+        db.add(like)
+        db.commit()
+        return True
 
-def browse():
-    st.header("Browse Users")
+def add_dummy_message():
     with get_session() as db:
-        users = db.exec(select(User).where(User.id != st.session_state.user.id)).all()
-        for u in users:
-            with st.container():
-                st.subheader(u.username)
-                if u.profile_pic and os.path.exists(u.profile_pic):
-                    st.image(u.profile_pic, width=100)
-                st.write(u.bio or "")
-                if st.button(f"Like {u.username}", key=f"like_{u.id}"):
-                    like = Like(from_user_id=st.session_state.user.id, to_user_id=u.id)
-                    db.add(like)
-                    db.commit()
-                    st.success("Liked!")
+        users = db.query(User).all()
+        if len(users) < 2:
+            return False
+        u1, u2 = random.sample(users, 2)
+        msg = Message(
+            sender_id=u1.id,
+            receiver_id=u2.id,
+            content=f"Hello from {u1.username} to {u2.username}",
+            created_at=datetime.utcnow()
+        )
+        db.add(msg)
+        db.commit()
+        return True
 
-def chat():
-    st.header("Chat")
-    receiver = st.text_input("Chat with user id:")
-    msg = st.text_input("Message")
-    if st.button("Send"):
-        with get_session() as db:
-            db.add(Message(sender_id=st.session_state.user.id, receiver_id=int(receiver), content=msg))
-            db.commit()
-    # Load messages
+# --- Page: Users ---
+if choice == "Users":
+    st.header("Users Table")
+    if st.button("➕ Add Dummy User"):
+        add_dummy_user()
+        st.success("Dummy user added!")
+
     with get_session() as db:
-        messages = db.exec(
-            select(Message).where(
-                ((Message.sender_id==st.session_state.user.id) & (Message.receiver_id==receiver)) |
-                ((Message.sender_id==receiver) & (Message.receiver_id==st.session_state.user.id))
-            ).order_by(Message.created_at)
-        ).all()
-        for m in messages:
-            sender = "Me" if m.sender_id == st.session_state.user.id else f"User {m.sender_id}"
-            st.write(f"{sender}: {m.content} ({m.created_at.strftime('%H:%M')})")
+        users = db.query(User).all()
+        if users:
+            st.dataframe([u.__dict__ for u in users])
+        else:
+            st.info("No users found.")
 
-# --- Main ---
-st.sidebar.title("Dating App (Admin Mode)")
-page = st.sidebar.radio("Menu", ["Profile", "Browse", "Chat"])
-if page == "Profile":
-    profile()
-elif page == "Browse":
-    browse()
-elif page == "Chat":
-    chat()
+# --- Page: Likes ---
+elif choice == "Likes":
+    st.header("Likes Table")
+    if st.button("➕ Add Dummy Like"):
+        if add_dummy_like():
+            st.success("Dummy like added!")
+        else:
+            st.warning("Need at least 2 users to create a like.")
+
+    with get_session() as db:
+        likes = db.query(Like).all()
+        if likes:
+            st.dataframe([l.__dict__ for l in likes])
+        else:
+            st.info("No likes found.")
+
+# --- Page: Messages ---
+elif choice == "Messages":
+    st.header("Messages Table")
+    if st.button("➕ Add Dummy Message"):
+        if add_dummy_message():
+            st.success("Dummy message added!")
+        else:
+            st.warning("Need at least 2 users to create a message.")
+
+    with get_session() as db:
+        messages = db.query(Message).all()
+        if messages:
+            st.dataframe([m.__dict__ for m in messages])
+        else:
+            st.info("No messages found.")
