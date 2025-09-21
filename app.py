@@ -48,13 +48,13 @@ def login():
             user = db.exec(select(User).where(User.username == username)).first()
             if user and verify_password(password, user.password):
                 st.session_state.user = user
-                st.experimental_rerun()
+                st.rerun()   # ✅ updated
             else:
                 st.error("Invalid login")
 
 def logout():
     st.session_state.user = None
-    st.experimental_rerun()
+    st.rerun()  # ✅ updated
 
 # --- Features ---
 def profile():
@@ -68,10 +68,12 @@ def profile():
         if st.button("Save"):
             if pic:
                 path = os.path.join(UPLOAD_DIR, f"user_{user.id}.png")
-                with open(path, "wb") as f: f.write(pic.read())
+                with open(path, "wb") as f:
+                    f.write(pic.read())
                 user.profile_pic = path
             user.bio = bio
-            db.add(user); db.commit()
+            db.add(user)
+            db.commit()
             st.success("Updated!")
 
 def browse():
@@ -86,7 +88,8 @@ def browse():
                 st.write(u.bio or "")
                 if st.button(f"Like {u.username}", key=f"like_{u.id}"):
                     like = Like(from_user_id=st.session_state.user.id, to_user_id=u.id)
-                    db.add(like); db.commit()
+                    db.add(like)
+                    db.commit()
                     st.success("Liked!")
 
 def chat():
@@ -97,8 +100,7 @@ def chat():
         with get_session() as db:
             db.add(Message(sender_id=st.session_state.user.id, receiver_id=int(receiver), content=msg))
             db.commit()
-    # auto refresh
-    st_autorefresh = st.experimental_rerun
+    # Load messages
     with get_session() as db:
         messages = db.exec(
             select(Message).where(
@@ -114,11 +116,17 @@ def chat():
 st.sidebar.title("Dating App")
 if st.session_state.user:
     page = st.sidebar.radio("Menu", ["Profile", "Browse", "Chat", "Logout"])
-    if page == "Profile": profile()
-    elif page == "Browse": browse()
-    elif page == "Chat": chat()
-    elif page == "Logout": logout()
+    if page == "Profile":
+        profile()
+    elif page == "Browse":
+        browse()
+    elif page == "Chat":
+        chat()
+    elif page == "Logout":
+        logout()
 else:
     page = st.sidebar.radio("Auth", ["Login", "Register"])
-    if page == "Login": login()
-    elif page == "Register": register()
+    if page == "Login":
+        login()
+    elif page == "Register":
+        register()
