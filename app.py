@@ -2,6 +2,13 @@
 import os
 import streamlit as st
 from db import init_db, get_session, User, Like, Message
+
+# --- Prevent reinitializing DB on every Streamlit reload ---
+if "db_initialized" not in st.session_state:
+    init_db()
+    st.session_state["db_initialized"] = True
+import streamlit as st
+from db import init_db, get_session, User, Like, Message
 from sqlmodel import select
 from datetime import datetime
 
